@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Elecnor Madrid — World Clock</title>
+<style>
+  :root{
+    --brand:#1e3c87;
+    --card:#24489e;
+    --card-line:#4a6cc4;
+    --txt:#ffffff;
+    --txt-soft:#b9c8ef;
+    --txt-faint:#8fa5e0;
+    --face:#ffffff;
+    --hand:#1e3c87;
+    --second:#f0823c;
+    --up:#7ddfb7; --down:#f3a07e;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:transparent;color:var(--txt);
+    font:14px/1.45 "Segoe UI",system-ui,-apple-system,Roboto,sans-serif;
+    padding:16px 0 0;-webkit-font-smoothing:antialiased}
+  .stack{display:flex;flex-direction:column;gap:9px;max-width:340px;margin:0 auto}
+
+  /* ── 2-column grid for clocks ── */
+  .clock-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+  /* ── flip wrapper ── */
+  .flip-wrap{height:84px;perspective:900px;cursor:pointer}
+  .flip-inner{width:100%;height:100%;position:relative;
+    transform-style:preserve-3d;transition:transform .5s cubic-bezier(.4,0,.2,1)}
+  .flip-wrap.flipped .flip-inner{transform:rotateY(180deg)}
+
+  /* ── shared face styles ── */
+  .clock,.clock-back{
+    position:absolute;inset:0;
+    display:flex;align-items:center;gap:8px;
+    border:1px solid var(--card-line);border-radius:10px;padding:7px 8px;
+    overflow:hidden;background-color:var(--card);
+    backface-visibility:hidden;-webkit-backface-visibility:hidden;
+  }
+  .clock{padding-right:24px}
+
+  /* ── photo layer ── */
+  .clock::before,.clock-back::before{
+    content:"";position:absolute;inset:0;
+    background-image:var(--bg-img);
+    background-size:cover;background-position:center;
+    opacity:0.28;z-index:0;
+  }
+  .clock::after,.clock-back::after{
+    content:"";position:absolute;inset:0;
+    background:linear-gradient(to right,var(--card) 25%,transparent 100%);
+    z-index:1;
+  }
+  .clock > *,.clock-back > *{position:relative;z-index:2}
+
+  /* ── back face ── */
+  .clock-back{transform:rotateY(180deg);gap:0;padding:8px 9px;flex-direction:column;justify-content:center}
+  .clock-back::after{background:linear-gradient(to right,var(--card) 0%,transparent 60%)}
+
+  /* ── front face internals ── */
+  .face-svg{flex:none}
+  .info{min-width:0;flex:1}
+  .city{display:flex;align-items:center;gap:5px;font-size:10px;
+    color:var(--txt-soft);white-space:nowrap;overflow:hidden}
+  .city img{width:14px;height:auto;border-radius:2px;display:block;flex:none}
+  .city .label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row2{display:flex;align-items:center;gap:5px;margin-top:1px}
+  .time{font-size:19px;font-weight:600;letter-spacing:-.01em;
+    font-variant-numeric:tabular-nums;line-height:1.1}
+  .dn{position:absolute;right:8px;top:50%;transform:translateY(-50%);z-index:3;
+    color:var(--txt-soft);display:flex;align-items:center}
+  .meta{font-size:9px;color:var(--txt-faint);line-height:1.3;
+    display:flex;flex-direction:column;margin-top:2px}
+
+  /* ── back face internals ── */
+  .back-city{font-size:9.5px;color:var(--txt-faint);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .back-main{display:flex;align-items:center;gap:6px}
+  .back-temp{font-size:19px;font-weight:600;line-height:1}
+  .back-desc{font-size:9.5px;color:var(--txt-soft);line-height:1.25;overflow:hidden}
+  .back-stats{display:flex;flex-direction:column;gap:1px;margin-top:5px}
+  .back-stat{font-size:9px;color:var(--txt-faint)}
+  .back-stat b{color:var(--txt-soft);font-weight:600}
+  .weather-icon{font-size:20px;line-height:1;flex:none}
+
+  /* ── fx card ── */
+  .fx{background:var(--card);border:1px solid var(--card-line);
+    border-radius:10px;padding:10px 12px}
+  .fx h2{margin:0 0 7px;font-size:11px;font-weight:600;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--txt-faint)}
+  .fx-row{display:flex;align-items:baseline;gap:8px;padding:4px 0;font-size:13px}
+  .fx-pair{color:var(--txt-soft);width:74px;flex:none}
+  .fx-rate{font-weight:600;font-variant-numeric:tabular-nums}
+  .fx-chg{margin-left:auto;font-size:11.5px;font-variant-numeric:tabular-nums}
+  .fx-chg.up{color:var(--up)} .fx-chg.down{color:var(--down)}
+  .fx-note{font-size:10.5px;color:var(--txt-faint);margin-top:6px}
+
+  /* ── stock card ── */
+  .stock{background:var(--card);border:1px solid var(--card-line);
+    border-radius:10px;padding:10px 14px;
+    display:flex;align-items:center;gap:10px}
+  .stock-name{display:flex;flex-direction:column;min-width:0;gap:1px}
+  .stock-co{font-size:14px;font-weight:600;color:var(--txt-soft);line-height:1.2}
+  .stock-tic{font-size:10.5px;color:var(--txt-faint);line-height:1.2}
+  .stock-price{margin-left:auto;font-size:20px;font-weight:600;
+    font-variant-numeric:tabular-nums;line-height:1;color:var(--txt)}
+</style>
+</head>
+<body>
+<div class="stack" id="stack"></div>
+
+<script>
+const CITIES = [
+  {
+    tz:"Europe/Madrid",       code:"MAD", label:"Madrid, Spain",   flag:"es",
+    lat:40.4168, lon:-3.7038,
+    img:"https://res.klook.com/image/upload/q_85/c_fill,w_750/v1763448084/dzo2bl9wffutosrn3k73.jpg",
+    imgBack:"https://stylecrazeworld.com/wp-content/uploads/2026/04/Olive-grove-at-golden-hour-1024x683.png"
+  },
+  {
+    tz:"Australia/Sydney",    code:"SYD", label:"Sydney, NSW",     flag:"au",
+    lat:-33.8688, lon:151.2093,
+    img:"https://assets.msccruises.com/is/image/msccruises/msc24033435",
+    imgBack:"https://www.thelostpassport.com/wp-content/uploads/2019/12/Shark-Beach-in-Sydney-Harbour.jpg"
+  },
+  {
+    tz:"Pacific/Auckland",    code:"AKL", label:"Auckland, NZ",    flag:"nz",
+    lat:-36.8485, lon:174.7633,
+    img:"https://www.scenichotelgroup.co.nz/content/uploads/2022/03/Region-Auckland-City-Sunset-Water-Banner-2000x1000.jpg",
+    imgBack:"https://www.lifeinnorway.net/wp-content/uploads/2022/08/8B85013F-7282-4421-900F-A61938CB2F57.jpeg"
+  },
+  {
+    tz:"Australia/Melbourne", code:"MEL", label:"Melbourne, VIC",  flag:"au",
+    lat:-37.8136, lon:144.9631,
+    img:"https://media.nomadicmatt.com/2024/melbthings.jpeg",
+    imgBack:"https://media.timeout.com/images/105123522/750/562/image.jpg"
+  },
+  {
+    tz:"Australia/Brisbane",  code:"BNE", label:"Brisbane, QLD",   flag:"au",
+    lat:-27.4698, lon:153.0251,
+    img:"https://t4.ftcdn.net/jpg/02/17/83/57/360_F_217835735_zUyWlaQCYjzMyWfQ32pmWpV6RERF79Rx.jpg",
+    imgBack:"https://media.istockphoto.com/id/153813702/photo/red-sand-in-simpson-desert-australian-outback.jpg?s=612x612&w=0&k=20&c=uWhW1SeEwcBz0GteY7-SCCe0kFmpMaabxj15G6r2Css="
+  },
+  {
+    tz:"Australia/Adelaide",  code:"ADL", label:"Adelaide, SA",    flag:"au",
+    lat:-34.9285, lon:138.6007,
+    img:"https://www.ilsc.com/hubfs/Imported_Blog_Media/Adelaide.jpg",
+    imgBack:"https://www.bumsonseats.com.au/wp-content/uploads/sites/1613/2020/06/Adelaide-Hills.jpg?w=1000&h=1000&zoom=2"
+  },
+];
+const BASE_TZ    = "Europe/Madrid";
+const WORK_START = 9, WORK_END = 17;
+const FX_PAIRS   = [["AUD","NZD"],["EUR","AUD"],["EUR","NZD"]];
+const FX_BASE    = "/api/fx";
+const OWM_KEY    = "19ab2fd09ce7c2353936fe18278ccaea";   // <-- paste your activated OpenWeather key here
+const OWM_ICON   = {
+  "01d":"☀️","01n":"☀️", "02d":"🌤️","02n":"🌤️", "03d":"⛅","03n":"⛅",
+  "04d":"☁️","04n":"☁️", "09d":"🌧️","09n":"🌧️", "10d":"🌦️","10n":"🌦️",
+  "11d":"⛈️","11n":"⛈️", "13d":"❄️","13n":"❄️", "50d":"🌫️","50n":"🌫️"
+};
+const WAPI_KEY   = "217dcb65b3ea492498645601260307";   // <-- paste your WeatherAPI.com key here
+const WAPI_ICON  = {
+  1000:"☀️", 1003:"🌤️", 1006:"⛅", 1009:"☁️",
+  1030:"🌫️", 1135:"🌫️", 1147:"🌫️",
+  1063:"🌦️", 1150:"🌦️", 1153:"🌦️", 1180:"🌦️", 1183:"🌧️", 1186:"🌧️", 1189:"🌧️", 1192:"🌧️", 1195:"🌧️", 1240:"🌦️", 1243:"🌧️", 1246:"🌧️",
+  1066:"🌨️", 1210:"🌨️", 1213:"❄️", 1216:"❄️", 1219:"❄️", 1222:"❄️", 1225:"❄️", 1255:"🌨️", 1258:"❄️",
+  1087:"⛈️", 1273:"⛈️", 1276:"⛈️", 1279:"⛈️", 1282:"⛈️"
+};
+const WTTR_ICON  = {
+  113:"☀️", 116:"🌤️", 119:"⛅", 122:"☁️",
+  143:"🌫️", 248:"🌫️", 260:"🌫️",
+  176:"🌦️", 263:"🌦️", 266:"🌦️", 293:"🌦️", 296:"🌦️", 353:"🌦️",
+  299:"🌧️", 302:"🌧️", 305:"🌧️", 308:"🌧️", 356:"🌧️", 359:"🌧️",
+  185:"🌧️", 281:"🌧️", 284:"🌧️", 311:"🌧️", 314:"🌧️", 317:"🌧️", 350:"🌧️", 362:"🌧️", 365:"🌧️", 374:"🌧️", 377:"🌧️",
+  179:"🌨️", 182:"🌨️", 227:"🌨️", 320:"🌨️", 323:"🌨️", 326:"🌨️", 368:"🌨️",
+  230:"❄️", 329:"❄️", 332:"❄️", 335:"❄️", 338:"❄️", 371:"❄️",
+  200:"⛈️", 386:"⛈️", 389:"⛈️", 392:"⛈️", 395:"⛈️"
+};
+const STOCK_BASE = "/api/stock";
+const STOCK = { symbol:"ENO.MC", company:"Elecnor, S.A.", exchange:"BME · Madrid" };
+
+const WMO = {
+  0:"Clear sky",1:"Mainly clear",2:"Partly cloudy",3:"Overcast",
+  45:"Foggy",48:"Icy fog",
+  51:"Light drizzle",53:"Drizzle",55:"Heavy drizzle",
+  61:"Light rain",63:"Rain",65:"Heavy rain",
+  71:"Light snow",73:"Snow",75:"Heavy snow",
+  80:"Showers",81:"Showers",82:"Heavy showers",
+  95:"Thunderstorm",96:"Thunderstorm",99:"Thunderstorm"
+};
+const WMO_ICON = {
+  0:"☀️",1:"🌤️",2:"⛅",3:"☁️",
+  45:"🌫️",48:"🌫️",
+  51:"🌦️",53:"🌦️",55:"🌧️",
+  61:"🌧️",63:"🌧️",65:"🌧️",
+  71:"🌨️",73:"❄️",75:"❄️",
+  80:"🌦️",81:"🌧️",82:"⛈️",
+  95:"⛈️",96:"⛈️",99:"⛈️"
+};
+
+const SUN  = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+const MOON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+
+const weatherCache = {};
+
+async function fetchWeather(city) {
+  if (weatherCache[city.code]) return weatherCache[city.code];
+
+  // Primary: Open-Meteo. Fails fast (6s) so it doesn't hang if the IP is blocked.
+  try {
+    const url = `/api/weather/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&current=temperature_2m,apparent_temperature,weathercode,windspeed_10m,relative_humidity_2m&wind_speed_unit=kmh&timezone=auto`;
+    const r = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    if (!r.ok) throw new Error("open-meteo " + r.status);
+    const c = (await r.json()).current;
+    const w = {
+      temp: Math.round(c.temperature_2m),
+      feels: Math.round(c.apparent_temperature),
+      code: c.weathercode,
+      wind: Math.round(c.windspeed_10m),
+      humidity: Math.round(c.relative_humidity_2m),
+      desc: WMO[c.weathercode] || "Unknown",
+      icon: WMO_ICON[c.weathercode] || "🌡️"
+    };
+    weatherCache[city.code] = w;
+    return w;
+  } catch (e) { /* fall through to backup */ }
+
+  // Backup: OpenWeatherMap (activates within ~2h of key creation).
+  try {
+    const url = `https://api.openweathermap.org/data/2.5/weather?lat=${city.lat}&lon=${city.lon}&units=metric&appid=${OWM_KEY}`;
+    const r = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    const d = await r.json();
+    if (String(d.cod) !== "200") throw new Error("owm " + d.cod);
+    const w = {
+      temp: Math.round(d.main.temp),
+      feels: Math.round(d.main.feels_like),
+      code: d.weather[0].id,
+      wind: Math.round(d.wind.speed * 3.6),   // OWM gives m/s -> km/h
+      humidity: Math.round(d.main.humidity),
+      desc: d.weather[0].main,
+      icon: OWM_ICON[d.weather[0].icon] || "🌡️"
+    };
+    weatherCache[city.code] = w;
+    return w;
+  } catch (e) { /* fall through to backup 2 */ }
+
+  // Backup 2: WeatherAPI.com
+  try {
+    const url = `https://api.weatherapi.com/v1/current.json?key=${WAPI_KEY}&q=${city.lat},${city.lon}&aqi=no`;
+    const r = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    const d = await r.json();
+    if (d.error) throw new Error("wapi " + d.error.code);
+    const c = d.current;
+    const w = {
+      temp: Math.round(c.temp_c),
+      feels: Math.round(c.feelslike_c),
+      code: c.condition.code,
+      wind: Math.round(c.wind_kph),
+      humidity: Math.round(c.humidity),
+      desc: c.condition.text,
+      icon: WAPI_ICON[c.condition.code] || "🌡️"
+    };
+    weatherCache[city.code] = w;
+    return w;
+  } catch (e) { /* fall through to backup 3 */ }
+
+  // Backup 3: wttr.in (keyless, last resort)
+  try {
+    const url = `https://wttr.in/${city.lat},${city.lon}?format=j1`;
+    const r = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    const c = (await r.json()).current_condition[0];
+    const code = parseInt(c.weatherCode, 10);
+    const w = {
+      temp: Math.round(+c.temp_C),
+      feels: Math.round(+c.FeelsLikeC),
+      code: code,
+      wind: Math.round(+c.windspeedKmph),
+      humidity: Math.round(+c.humidity),
+      desc: c.weatherDesc[0].value,
+      icon: WTTR_ICON[code] || "🌡️"
+    };
+    weatherCache[city.code] = w;
+    return w;
+  } catch (e) { return null; }
+}
+
+function bgStyle(url) {
+  return url ? `--bg-img:url('${url}')` : `--bg-img:none`;
+}
+
+const stack = document.getElementById("stack");
+const clockCards = CITIES.map((c) => `
+  <div class="flip-wrap" id="wrap-${c.code}" onclick="handleFlip('${c.code}')">
+    <div class="flip-inner">
+      <div class="clock" style="${bgStyle(c.img)}">
+        <svg class="face-svg" viewBox="0 0 52 52" width="38" height="38" role="img" aria-label="${c.label} clock">
+          <circle cx="26" cy="26" r="24" fill="var(--face)"/>
+          <line class="hh" x1="26" y1="26" x2="26" y2="15.5" stroke="var(--hand)" stroke-width="2.6" stroke-linecap="round"/>
+          <line class="mh" x1="26" y1="26" x2="26" y2="9.5" stroke="var(--hand)" stroke-width="1.7" stroke-linecap="round"/>
+          <line class="sh" x1="26" y1="28" x2="26" y2="8" stroke="var(--second)" stroke-width="1"/>
+          <circle cx="26" cy="26" r="1.6" fill="var(--hand)"/>
+        </svg>
+        <div class="info">
+          <div class="city">
+            <img src="https://flagcdn.com/w20/${c.flag}.png" srcset="https://flagcdn.com/w40/${c.flag}.png 2x" alt="" onerror="this.style.display='none'">
+            <span class="label">${c.label.split(",")[0]}</span>
+          </div>
+          <div class="row2">
+            <span class="time">--:--</span>
+          </div>
+          <span class="meta"><span class="off"></span><span class="dt"></span></span>
+        </div>
+        <span class="dn" aria-hidden="true"></span>
+      </div>
+      <div class="clock-back" id="back-${c.code}" style="${bgStyle(c.imgBack)}">
+        <div class="back-city"><b>${c.code}</b> · ${c.label}</div>
+        <div class="back-main">
+          <span class="weather-icon" id="wicon-${c.code}">—</span>
+          <span class="back-temp" id="wtemp-${c.code}">—</span>
+          <span class="back-desc" id="wdesc-${c.code}">Loading…</span>
+        </div>
+        <div class="back-stats">
+          <span class="back-stat">Feels <b id="wfeel-${c.code}">—</b> · Hum <b id="whum-${c.code}">—</b></span>
+          <span class="back-stat">Wind <b id="wwind-${c.code}">—</b></span>
+        </div>
+      </div>
+    </div>
+  </div>`).join("");
+
+stack.innerHTML = `<div class="clock-grid">${clockCards}</div>
+  <div class="stock">
+    <div class="stock-name">
+      <span class="stock-co">${STOCK.company}</span>
+      <span class="stock-tic">${STOCK.exchange}</span>
+    </div>
+    <span class="stock-price" id="stPrice">—</span>
+  </div>
+  <div class="fx">
+    <h2>Exchange rates</h2>
+    <div id="fxRows"><div class="fx-row"><span class="fx-pair">Loading…</span></div></div>
+    <div class="fx-note" id="fxNote"></div>
+  </div>`;
+
+async function handleFlip(code) {
+  const wrap = document.getElementById(`wrap-${code}`);
+  wrap.classList.toggle("flipped");
+  if (wrap.classList.contains("flipped")) {
+    const city = CITIES.find(c => c.code === code);
+    const w = await fetchWeather(city);
+    if (w) {
+      document.getElementById(`wicon-${code}`).textContent = w.icon;
+      document.getElementById(`wtemp-${code}`).textContent = `${w.temp}°C`;
+      document.getElementById(`wdesc-${code}`).textContent = w.desc;
+      document.getElementById(`wfeel-${code}`).textContent = `${w.feels}°C`;
+      document.getElementById(`whum-${code}`).textContent = `${w.humidity}%`;
+      document.getElementById(`wwind-${code}`).textContent = `${w.wind} km/h`;
+    } else {
+      document.getElementById(`wdesc-${code}`).textContent = "Unavailable";
+    }
+  }
+}
+
+function parts(tz){
+  const f = new Intl.DateTimeFormat("en-AU",{timeZone:tz,hour:"2-digit",
+    minute:"2-digit",second:"2-digit",hour12:false,weekday:"short",day:"numeric",month:"short"});
+  const p = {}; f.formatToParts(new Date()).forEach(x => p[x.type]=x.value);
+  return p;
+}
+function offsetMin(tz){
+  const now = new Date();
+  const loc  = new Date(now.toLocaleString("en-US",{timeZone:tz}));
+  const base = new Date(now.toLocaleString("en-US",{timeZone:BASE_TZ}));
+  return Math.round((loc - base)/60000);
+}
+function tick(){
+  document.querySelectorAll(".clock").forEach((el,i) => {
+    const c = CITIES[i], p = parts(c.tz);
+    const h = +p.hour, m = +p.minute, s = +p.second;
+    el.querySelector(".time").textContent = p.hour + ":" + p.minute;
+    el.querySelector(".dt").textContent = p.weekday + " " + p.day + " " + p.month;
+    el.querySelector(".hh").setAttribute("transform",`rotate(${(h%12)*30+m*0.5} 26 26)`);
+    el.querySelector(".mh").setAttribute("transform",`rotate(${m*6+s*0.1} 26 26)`);
+    el.querySelector(".sh").setAttribute("transform",`rotate(${s*6} 26 26)`);
+    el.querySelector(".dn").innerHTML = (h>=WORK_START && h<WORK_END) ? SUN : MOON;
+    const d = offsetMin(c.tz), a = Math.abs(d);
+    el.querySelector(".off").textContent = d===0 ? "HQ time" :
+      (a%60 ? Math.floor(a/60)+"h "+(a%60)+"m" : a/60+"h") + (d<0?" behind":" ahead");
+  });
+}
+tick(); setInterval(tick, 1000);
+
+async function loadStock(){
+  try{
+    const r = await fetch(`${STOCK_BASE}?symbol=${STOCK.symbol}&interval=1d&range=1d`);
+    const d = await r.json();
+    const m = d.chart.result[0].meta;
+    const price = m.regularMarketPrice;
+    const cur   = m.currency || "EUR";
+    const sym   = cur === "EUR" ? "€" : (cur === "USD" ? "$" : cur + " ");
+    document.getElementById("stPrice").textContent = sym + price.toFixed(3);
+  }catch(e){
+    document.getElementById("stPrice").textContent = "—";
+    setTimeout(loadStock, 60000);
+  }
+}
+loadStock(); setInterval(loadStock, 5*60000);
+
+async function loadFX(){
+  try{
+    const bases = [...new Set(FX_PAIRS.map(p=>p[0]))];
+    const prev = new Date(Date.now()-7*864e5).toISOString().slice(0,10);
+    const data = {};
+    for(const b of bases){
+      const syms = FX_PAIRS.filter(p=>p[0]===b).map(p=>p[1]).join(",");
+      const [now,old] = await Promise.all([
+        fetch(`${FX_BASE}/latest?from=${b}&to=${syms}`).then(r=>r.json()),
+        fetch(`${FX_BASE}/${prev}?from=${b}&to=${syms}`).then(r=>r.json()),
+      ]);
+      data[b]={now:now.rates,old:old.rates,date:now.date};
+    }
+    document.getElementById("fxRows").innerHTML = FX_PAIRS.map(([b,q])=>{
+      const r=data[b].now[q],o=data[b].old[q];
+      const chg=o?((r-o)/o*100):0;
+      const cls=chg>=0?"up":"down", arrow=chg>=0?"▲":"▼";
+      return `<div class="fx-row"><span class="fx-pair">${b}/${q}</span>
+        <span class="fx-rate">${r.toFixed(4)}</span>
+        <span class="fx-chg ${cls}">${arrow} ${Math.abs(chg).toFixed(2)}% wk</span></div>`;
+    }).join("");
+    document.getElementById("fxNote").textContent = "ECB reference rates · "+data[FX_PAIRS[0][0]].date;
+  }catch(e){
+    document.getElementById("fxRows").innerHTML='<div class="fx-row"><span class="fx-pair" style="width:auto">Rates unavailable — will retry</span></div>';
+    setTimeout(loadFX,60000);
+  }
+}
+loadFX(); setInterval(loadFX,6*36e5);
+</script>
+</body>
+</html>

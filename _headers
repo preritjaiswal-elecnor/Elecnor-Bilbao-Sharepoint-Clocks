@@ -1,0 +1,3 @@
+# Cloudflare Pages — static asset headers
+/api/*
+  Access-Control-Allow-Origin: *
